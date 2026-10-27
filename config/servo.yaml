@@ -1,0 +1,46 @@
+# MoveIt Servo parameters for PiPER-X in Isaac Sim.
+# Loaded by bringup.launch.py under the "moveit_servo" namespace.
+# Keys use Humble names; Jazzy aliases are included where they differ
+# (a node ignores parameters it does not declare, so both are safe).
+# move_group_name, ee_frame and command_out_topic are overwritten from launch args.
+
+move_group_name: arm
+planning_frame: base_link
+ee_frame_name: link6          # Humble
+ee_frame: link6               # Jazzy
+robot_link_command_frame: base_link
+
+command_in_type: unitless     # stick +-1 is scaled below
+scale:
+  linear: 0.1                 # m/s at full stick
+  rotational: 0.5             # rad/s at full stick
+  joint: 0.5
+
+cartesian_command_in_topic: ~/delta_twist_cmds
+joint_command_in_topic: ~/delta_joint_cmds
+joint_topic: /joint_states
+status_topic: ~/status
+
+command_out_topic: /arm_controller/joint_trajectory
+command_out_type: trajectory_msgs/JointTrajectory
+publish_joint_positions: true
+publish_joint_velocities: false
+publish_joint_accelerations: false
+publish_period: 0.01
+incoming_command_timeout: 0.1
+num_outgoing_halt_msgs_to_publish: 4
+
+low_pass_filter_coeff: 2.0    # Humble smoothing
+
+lower_singularity_threshold: 17.0
+hard_stop_singularity_threshold: 30.0
+joint_limit_margin: 0.1       # rad
+
+check_collisions: true
+collision_check_rate: 10.0
+self_collision_proximity_threshold: 0.01
+scene_collision_proximity_threshold: 0.02
+
+use_gazebo: false
+is_primary_planning_scene_monitor: false   # move_group owns the planning scene
+monitored_planning_scene_topic: /monitored_planning_scene
