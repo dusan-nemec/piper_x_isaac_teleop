@@ -21,9 +21,11 @@ joy_node -> joy_teleop -> servo_node -> arm_controller (JTC)
 
 * Loads the URDF, SRDF, kinematics, joint limits, controllers and RViz config
   from `piper_x_gripper_moveit_config`.
-* Swaps the mock hardware (`mock_components/GenericSystem`) for
-  `topic_based_ros2_control` in memory at launch; your MoveIt config package
-  stays untouched.
+* Replaces whatever ros2_control hardware the URDF declares (mock, real-robot
+  driver, Gazebo...) with `topic_based_ros2_control`, in memory at launch.
+  If the URDF has no `<ros2_control>` block, one is added for the joints in
+  the `ros2_control_joints` launch argument. Your MoveIt config package stays
+  untouched.
 * `isaac_bridge` maps the ROS-side virtual `gripper` joint (opening width,
   0-0.1 m) to the two Isaac finger joints (`gripper_joint1 = w/2`,
   `gripper_joint2 = -w/2`) and back.

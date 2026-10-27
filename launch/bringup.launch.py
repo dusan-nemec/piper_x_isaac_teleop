@@ -1,8 +1,8 @@
 """PiPER-X + gripper in Isaac Sim: ros2_control, MoveIt, Servo, joystick teleop.
 
 Reuses piper_x_gripper_moveit_config unchanged. The only modification is done
-in memory: its ros2_control hardware (mock_components/GenericSystem) is swapped
-for topic_based_ros2_control, so controllers talk to Isaac Sim via topics.
+in memory: whatever ros2_control hardware its URDF declares (or none) is replaced
+by topic_based_ros2_control, so controllers talk to Isaac Sim via topics.
 
     ros2_control  --/ros_joint_commands-->  isaac_bridge  --/isaac_joint_commands-->  Isaac Sim
     ros2_control  <--/ros_joint_states---   isaac_bridge  <--/isaac_joint_states----  Isaac Sim
@@ -15,6 +15,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction, TimerAction
 from launch.conditions import IfCondition
+from launch.logging import get_logger
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from moveit_configs_utils import MoveItConfigsBuilder
@@ -29,16 +30,49 @@ ARGS = [
     ("arm_controller", "arm_controller", "JointTrajectoryController for the arm"),
     ("gripper_controller", "gripper_controller", "JointTrajectoryController for the gripper"),
     ("gripper_joint", "gripper", "Virtual gripper joint on the ROS side"),
+    ("ros2_control_joints", "joint1,joint2,joint3,joint4,joint5,joint6,gripper",
+     "Joints for the ros2_control block, used only if the URDF has none"),
     ("joy_dev", "0", "Joystick device id for joy_node"),
     ("use_rviz", "true", "Start RViz"),
     ("use_joy", "true", "Start joy_node + joy_teleop"),
 ]
 
-HW_PLUGIN = (
+HW_BLOCK = (
+    "<hardware>"
     "<plugin>topic_based_ros2_control/TopicBasedSystem</plugin>"
     '<param name="joint_commands_topic">/ros_joint_commands</param>'
     '<param name="joint_states_topic">/ros_joint_states</param>'
+    "</hardware>"
 )
+
+
+def use_isaac_hardware(urdf: str, joints: list, logger) -> str:
+    """Point ros2_control at Isaac Sim, whatever hardware the URDF had before.
+
+    * ros2_control blocks present -> replace their <hardware> section
+    * no ros2_control block       -> append one for `joints`
+    """
+    blocks = re.findall(r"<ros2_control\b.*?</ros2_control>", urdf, flags=re.S)
+    if blocks:
+        for block in blocks:
+            old = re.search(r"<plugin>\s*(.*?)\s*</plugin>", block, flags=re.S)
+            logger.info(f"ros2_control: replacing hardware "
+                        f"'{old.group(1) if old else 'none'}' with TopicBasedSystem")
+            if re.search(r"<hardware>.*?</hardware>", block, flags=re.S):
+                patched = re.sub(r"<hardware>.*?</hardware>", HW_BLOCK, block,
+                                 count=1, flags=re.S)
+            else:
+                patched = re.sub(r"(<ros2_control\b[^>]*>)", r"\1" + HW_BLOCK, block, count=1)
+            urdf = urdf.replace(block, patched)
+        return urdf
+
+    logger.info(f"ros2_control: no block in URDF, adding TopicBasedSystem for {joints}")
+    joint_xml = "".join(
+        f'<joint name="{j}"><command_interface name="position"/>'
+        f'<state_interface name="position"/><state_interface name="velocity"/></joint>'
+        for j in joints)
+    block = f'<ros2_control name="IsaacSystem" type="system">{HW_BLOCK}{joint_xml}</ros2_control>'
+    return re.sub(r"</robot>\s*$", block + "</robot>", urdf.rstrip())
 
 
 def launch_setup(context, *_):
@@ -53,9 +87,8 @@ def launch_setup(context, *_):
     urdf = mc.robot_description["robot_description"]
     if not isinstance(urdf, str):
         raise RuntimeError("robot_description is not a plain string; cannot patch hardware plugin")
-    urdf, n = re.subn(r"<plugin>\s*mock_components/GenericSystem\s*</plugin>", HW_PLUGIN, urdf)
-    if n == 0:
-        raise RuntimeError(f"No mock_components/GenericSystem found in {moveit_pkg}'s URDF")
+    joints = [j.strip() for j in arg("ros2_control_joints").split(",") if j.strip()]
+    urdf = use_isaac_hardware(urdf, joints, get_logger("piper_x_isaac_teleop"))
     robot_description = {"robot_description": urdf}
 
     controllers_yaml = os.path.join(moveit_share, "config", "ros2_controllers.yaml")
