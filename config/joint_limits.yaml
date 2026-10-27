@@ -1,0 +1,18 @@
+# Joint limits for MoveIt planning and Servo (PiPER-X + AgileX gripper).
+# Overrides joint_limits.yaml of the MoveIt config package, because time
+# parameterization (AddTimeOptimalParameterization) needs acceleration limits.
+# Velocities match the URDF (5 rad/s arm, 3 m/s gripper is unrealistic -> 1.0);
+# accelerations follow AgileX's own agx_arm_moveit config.
+# Slow everything down in RViz with the velocity/acceleration scaling sliders.
+
+default_velocity_scaling_factor: 0.1
+default_acceleration_scaling_factor: 0.1
+
+joint_limits:
+  joint1: {has_velocity_limits: true, max_velocity: 5.0, has_acceleration_limits: true, max_acceleration: 5.0}
+  joint2: {has_velocity_limits: true, max_velocity: 5.0, has_acceleration_limits: true, max_acceleration: 5.0}
+  joint3: {has_velocity_limits: true, max_velocity: 5.0, has_acceleration_limits: true, max_acceleration: 5.0}
+  joint4: {has_velocity_limits: true, max_velocity: 5.0, has_acceleration_limits: true, max_acceleration: 5.0}
+  joint5: {has_velocity_limits: true, max_velocity: 5.0, has_acceleration_limits: true, max_acceleration: 5.0}
+  joint6: {has_velocity_limits: true, max_velocity: 5.0, has_acceleration_limits: true, max_acceleration: 5.0}
+  gripper: {has_velocity_limits: true, max_velocity: 1.0, has_acceleration_limits: true, max_acceleration: 1.0}

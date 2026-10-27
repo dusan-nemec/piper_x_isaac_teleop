@@ -15,7 +15,7 @@
   <exec_depend>moveit_msgs</exec_depend>
   <exec_depend>joy</exec_depend>
 
-  <exec_depend>piper_x_gripper_moveit_config</exec_depend>
+  <exec_depend>agx_arm_moveit</exec_depend>
   <exec_depend>moveit_configs_utils</exec_depend>
   <exec_depend>moveit_ros_move_group</exec_depend>
   <exec_depend>moveit_servo</exec_depend>

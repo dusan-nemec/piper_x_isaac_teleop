@@ -1,8 +1,10 @@
 # piper_x_isaac_teleop
 
 Runs the AgileX PiPER-X (with gripper) in Isaac Sim through ros2_control, MoveIt 2
-and MoveIt Servo, with Cartesian joystick teleoperation. It reuses
-`piper_x_gripper_moveit_config` without modifying it.
+and MoveIt Servo, with Cartesian joystick teleoperation. It reuses an existing MoveIt config
+without modifying it: by default AgileX's official `agx_arm_moveit`
+(from [agx_arm_ros](https://github.com/agilexrobotics/agx_arm_ros)), or any
+MoveIt Setup Assistant package such as `piper_x_gripper_moveit_config`.
 
 ```
 joy_node -> joy_teleop -> servo_node -> arm_controller (JTC)
@@ -20,7 +22,9 @@ joy_node -> joy_teleop -> servo_node -> arm_controller (JTC)
 ## What it does
 
 * Loads the URDF, SRDF, kinematics, joint limits, controllers and RViz config
-  from `piper_x_gripper_moveit_config`.
+  from the MoveIt config package. For `agx_arm_moveit` it uses the same xacro
+  mappings as AgileX's own launch files (`arm_type:=piper_x`,
+  `effector_type:=agx_gripper`, `tcp_offset`).
 * Replaces whatever ros2_control hardware the URDF declares (mock, real-robot
   driver, Gazebo...) with `topic_based_ros2_control`, in memory at launch.
   If the URDF has no `<ros2_control>` block, one is added for the joints in
@@ -37,10 +41,11 @@ joy_node -> joy_teleop -> servo_node -> arm_controller (JTC)
 * MoveIt 2 + `moveit_servo`, `ros2_control`, `ros2_controllers`, `joy`
 * [`topic_based_ros2_control`](https://github.com/PickNikRobotics/topic_based_ros2_control)
   (build from source if it isn't packaged for your distro)
-* `piper_x_gripper_moveit_config` in the same workspace. It must define
-  controllers named `arm_controller` and `gripper_controller` of type
-  `joint_trajectory_controller/JointTrajectoryController`, or you pass other
-  names as launch args.
+* `agx_arm_ros` (for `agx_arm_moveit` and `agx_arm_description`) in the same
+  workspace, or your own MoveIt config package. Controllers are expected to be
+  named `arm_controller` and `gripper_controller`
+  (`joint_trajectory_controller/JointTrajectoryController`); other names can
+  be passed as launch args.
 
 ## Isaac Sim side
 
@@ -67,9 +72,13 @@ Useful launch arguments:
 
 | Argument | Default | Notes |
 |---|---|---|
-| `robot_name` | `piper_x` | must match `config/<robot_name>.srdf` in the MoveIt package |
+| `moveit_config_pkg` | `agx_arm_moveit` | or e.g. `piper_x_gripper_moveit_config` |
+| `arm_type` | `piper_x` | `agx_arm_moveit` only |
+| `tcp_offset` | `[0,0,0,0,0,0]` | `agx_arm_moveit` only: TCP offset from the flange |
+| `robot_name` | `piper_x` | Setup-Assistant packages only: `config/<robot_name>.srdf` |
 | `move_group` | `arm` | planning group from the SRDF |
-| `ee_frame` | `link6` | use `tcp_link` if your URDF has one |
+| `ee_frame` | auto | `tcp_link` for `agx_arm_moveit`, `link6` otherwise |
+| `joint_limits` | auto | `agx_arm_moveit`'s own file; this package's file for Setup-Assistant packages |
 | `arm_controller` / `gripper_controller` | `arm_controller` / `gripper_controller` | names from `ros2_controllers.yaml` |
 | `use_rviz`, `use_joy` | `true` | |
 

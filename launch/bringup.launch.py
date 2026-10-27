@@ -1,12 +1,14 @@
 """PiPER-X + gripper in Isaac Sim: ros2_control, MoveIt, Servo, joystick teleop.
 
-Reuses piper_x_gripper_moveit_config unchanged. The only modification is done
+Reuses a MoveIt config unchanged: AgileX's agx_arm_moveit (default)
+or a Setup-Assistant package such as piper_x_gripper_moveit_config. The only modification is done
 in memory: whatever ros2_control hardware its URDF declares (or none) is replaced
 by topic_based_ros2_control, so controllers talk to Isaac Sim via topics.
 
     ros2_control  --/ros_joint_commands-->  isaac_bridge  --/isaac_joint_commands-->  Isaac Sim
     ros2_control  <--/ros_joint_states---   isaac_bridge  <--/isaac_joint_states----  Isaac Sim
 """
+import ast
 import os
 import re
 
@@ -23,15 +25,23 @@ from moveit_configs_utils import MoveItConfigsBuilder
 THIS_PKG = "piper_x_isaac_teleop"
 
 ARGS = [
-    ("moveit_config_pkg", "piper_x_gripper_moveit_config", "MoveIt config package to reuse"),
-    ("robot_name", "piper_x", "Name used by the MoveIt config files (config/<name>.srdf ...)"),
+    ("moveit_config_pkg", "agx_arm_moveit",
+     "MoveIt config to reuse: agx_arm_moveit (official, parameterized) "
+     "or a Setup-Assistant package such as piper_x_gripper_moveit_config"),
+    ("arm_type", "piper_x", "agx_arm_moveit only: arm model"),
+    ("tcp_offset", "[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
+     "agx_arm_moveit only: tcp_link offset from the flange [x y z rx ry rz]"),
+    ("robot_name", "piper_x", "Setup-Assistant packages only: config/<robot_name>.srdf ..."),
     ("move_group", "arm", "Planning group Servo controls"),
-    ("ee_frame", "link6", "End-effector frame for Servo (e.g. tcp_link if your URDF has one)"),
+    ("ee_frame", "", "End-effector frame for Servo (empty = tcp_link for agx_arm_moveit, else link6)"),
     ("arm_controller", "arm_controller", "JointTrajectoryController for the arm"),
     ("gripper_controller", "gripper_controller", "JointTrajectoryController for the gripper"),
     ("gripper_joint", "gripper", "Virtual gripper joint on the ROS side"),
     ("ros2_control_joints", "joint1,joint2,joint3,joint4,joint5,joint6,gripper",
      "Joints for the ros2_control block, used only if the URDF has none"),
+    ("joint_limits", "",
+     "joint_limits.yaml override (absolute path). Empty = the MoveIt package's own file, "
+     "or this package's file for Setup-Assistant packages (they lack acceleration limits)"),
     ("joy_dev", "0", "Joystick device id for joy_node"),
     ("use_rviz", "true", "Start RViz"),
     ("use_joy", "true", "Start joy_node + joy_teleop"),
@@ -81,7 +91,33 @@ def launch_setup(context, *_):
     moveit_pkg = arg("moveit_config_pkg")
     moveit_share = get_package_share_directory(moveit_pkg)
 
-    mc = MoveItConfigsBuilder(arg("robot_name"), package_name=moveit_pkg).to_moveit_configs()
+    is_agx = moveit_pkg == "agx_arm_moveit"
+    if is_agx:
+        # same mappings AgileX's own launch files use (_moveit_config_builder.py)
+        tcp = ast.literal_eval(arg("tcp_offset"))
+        builder = (
+            MoveItConfigsBuilder("agx_arm", package_name=moveit_pkg)
+            .robot_description(file_path="config/agx_arm.urdf.xacro", mappings={
+                "arm_type": arg("arm_type"), "effector_type": "agx_gripper",
+                "revo2_type": "left",
+                "tcp_offset_xyz": f"{tcp[0]} {tcp[1]} {tcp[2]}",
+                "tcp_offset_rpy": f"{tcp[3]} {tcp[4]} {tcp[5]}"})
+            .robot_description_semantic(file_path="config/agx_arm.srdf.xacro", mappings={
+                "arm_type": arg("arm_type"), "effector_type": "agx_gripper",
+                "revo2_type": "left"})
+            .robot_description_kinematics(file_path="config/kinematics.yaml")
+            .joint_limits(file_path="config/joint_limits.yaml")
+            .trajectory_execution(file_path="config/moveit_controllers_gripper.yaml")
+        )
+    else:
+        builder = MoveItConfigsBuilder(arg("robot_name"), package_name=moveit_pkg)
+
+    joint_limits = arg("joint_limits") or (
+        "" if is_agx else os.path.join(get_package_share_directory(THIS_PKG),
+                                       "config", "joint_limits.yaml"))
+    if joint_limits:  # absolute path overrides the MoveIt package's file
+        builder = builder.joint_limits(file_path=joint_limits)
+    mc = builder.to_moveit_configs()
 
     # --- robot_description with Isaac (topic-based) hardware -----------------
     urdf = mc.robot_description["robot_description"]
@@ -97,7 +133,8 @@ def launch_setup(context, *_):
     with open(os.path.join(get_package_share_directory(THIS_PKG), "config", "servo.yaml")) as f:
         servo = yaml.safe_load(f)
     servo["move_group_name"] = arg("move_group")
-    servo["ee_frame_name"] = servo["ee_frame"] = arg("ee_frame")
+    ee_frame = arg("ee_frame") or ("tcp_link" if is_agx else "link6")
+    servo["ee_frame_name"] = servo["ee_frame"] = ee_frame
     servo["command_out_topic"] = f"/{arg('arm_controller')}/joint_trajectory"
     servo_exe = "servo_node_main" if os.environ.get("ROS_DISTRO") == "humble" else "servo_node"
 
