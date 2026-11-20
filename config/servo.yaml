@@ -32,8 +32,11 @@ num_outgoing_halt_msgs_to_publish: 4
 
 low_pass_filter_coeff: 2.0    # Humble smoothing
 
-lower_singularity_threshold: 17.0
-hard_stop_singularity_threshold: 30.0
+# Jacobian condition number limits. The defaults (17 / 30) are tuned for large
+# arms; PiPER's short links make the condition number ~30 in ordinary poses.
+# Wrist singularity (joint5 -> 0): cond ~93 @0.2 rad, ~185 @0.1, ~370 @0.05.
+lower_singularity_threshold: 100.0     # start decelerating
+hard_stop_singularity_threshold: 300.0 # halt
 joint_limit_margin: 0.1       # rad
 
 check_collisions: true

@@ -1,0 +1,24 @@
+# Predefined poses for joy_teleop's joint-space moves.
+# Loaded by bringup.launch.py. Each pose has either
+#   joints: [joint1 .. joint6]                 rad, in `arm_joints` order;
+#           sent to /supervisor/joint_command (move_group plans + executes)
+#   pose:   [x, y, z, roll, pitch, yaw]        or [x, y, z, qx, qy, qz, qw]
+#           ee_frame pose in planning_frame (base_link); sent to
+#           /supervisor/joint_target (move_group plans + executes)
+# and an optional joystick `button` index. Trigger by name with
+#   ros2 topic pub --once /joy_teleop/goto std_msgs/msg/String "{data: home}"
+# Use floats (0.0, not 0), or ROS rejects the array type.
+# Record a pose: ros2 run tf2_ros tf2_echo base_link tcp_link   (Cartesian)
+#                ros2 topic echo --once /joint_states            (joints)
+# The values below are examples. Check them in your scene before use.
+
+joy_teleop:
+  ros__parameters:
+    poses:
+      home:
+        # bent "ready" pose, away from joint2/joint3 limits at zero
+        joints: [0.0, 0.8, -0.8, 0.0, 0.5, 0.0]
+        button: 6            # Back
+      tool_grab:
+        pose: [0.25, 0.0, 0.15, 0.0, 3.14159, 0.0]
+        button: 2            # X

@@ -28,10 +28,10 @@ ARGS = [
     ("moveit_config_pkg", "agx_arm_moveit",
      "MoveIt config to reuse: agx_arm_moveit (official, parameterized) "
      "or a Setup-Assistant package such as piper_x_gripper_moveit_config"),
-    ("arm_type", "piper_x", "agx_arm_moveit only: arm model"),
+    ("arm_type", "piper_l", "agx_arm_moveit only: arm model"),
     ("tcp_offset", "[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
      "agx_arm_moveit only: tcp_link offset from the flange [x y z rx ry rz]"),
-    ("robot_name", "piper_x", "Setup-Assistant packages only: config/<robot_name>.srdf ..."),
+    ("robot_name", "piper_l", "Setup-Assistant packages only: config/<robot_name>.srdf ..."),
     ("move_group", "arm", "Planning group Servo controls"),
     ("ee_frame", "", "End-effector frame for Servo (empty = tcp_link for agx_arm_moveit, else link6)"),
     ("arm_controller", "arm_controller", "JointTrajectoryController for the arm"),
@@ -43,13 +43,13 @@ ARGS = [
      "joint_limits.yaml override (absolute path). Empty = the MoveIt package's own file, "
      "or this package's file for Setup-Assistant packages (they lack acceleration limits)"),
     ("joy_dev", "0", "Joystick device id for joy_node"),
-    ("use_rviz", "true", "Start RViz"),
+    ("use_rviz", "false", "Start RViz"),
     ("use_joy", "true", "Start joy_node + joy_teleop"),
 ]
 
 HW_BLOCK = (
     "<hardware>"
-    "<plugin>topic_based_ros2_control/TopicBasedSystem</plugin>"
+    "<plugin>joint_state_topic_hardware_interface/JointStateTopicSystem</plugin>"
     '<param name="joint_commands_topic">/ros_joint_commands</param>'
     '<param name="joint_states_topic">/ros_joint_states</param>'
     "</hardware>"
@@ -128,7 +128,6 @@ def launch_setup(context, *_):
     robot_description = {"robot_description": urdf}
 
     controllers_yaml = os.path.join(moveit_share, "config", "ros2_controllers.yaml")
-
     # --- Servo parameters -----------------------------------------------------
     with open(os.path.join(get_package_share_directory(THIS_PKG), "config", "servo.yaml")) as f:
         servo = yaml.safe_load(f)
@@ -149,6 +148,10 @@ def launch_setup(context, *_):
 
         Node(package=THIS_PKG, executable="isaac_bridge",
              parameters=[{"gripper_joint": arg("gripper_joint")}, sim], output="screen"),
+
+        Node(package="joy_linux", executable="joy_linux_node",
+            parameters=[{"dev": "/dev/input/js0", "autorepeat_rate": 50.0}, sim],
+            condition=IfCondition(arg("use_joy")), output="screen"),
 
         Node(package="controller_manager", executable="ros2_control_node",
              parameters=[robot_description, controllers_yaml, sim],
@@ -178,14 +181,18 @@ def launch_setup(context, *_):
                          mc.joint_limits, sim],
              condition=IfCondition(arg("use_rviz")), output="log"),
 
-        Node(package="joy", executable="joy_node",
-             parameters=[{"device_id": int(arg("joy_dev")), "autorepeat_rate": 50.0,
-                          "deadzone": 0.05}, sim],
-             condition=IfCondition(arg("use_joy")), output="screen"),
+        Node(package=THIS_PKG, executable="supervisor", name="robot_supervisor",
+             parameters=[{"planning_frame": servo["planning_frame"],
+                          "command_frame": servo["robot_link_command_frame"],
+                          "ee_frame": ee_frame,
+                          "move_group": arg("move_group"),
+                          "gripper_controller": arg("gripper_controller"),
+                          "gripper_joint": arg("gripper_joint")}, sim],
+             output="screen"),
 
         Node(package=THIS_PKG, executable="joy_teleop",
-             parameters=[{"gripper_controller": arg("gripper_controller"),
-                          "gripper_joint": arg("gripper_joint")}, sim],
+             parameters=[os.path.join(get_package_share_directory(THIS_PKG),
+                                      "config", "poses.yaml"), sim],
              condition=IfCondition(arg("use_joy")), output="screen"),
     ]
     return nodes

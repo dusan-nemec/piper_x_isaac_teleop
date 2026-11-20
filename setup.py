@@ -22,6 +22,7 @@ setup(
         "console_scripts": [
             "isaac_bridge = piper_x_isaac_teleop.isaac_bridge:main",
             "joy_teleop = piper_x_isaac_teleop.joy_teleop:main",
+            "supervisor = piper_x_isaac_teleop.supervisor:main",
         ],
     },
 )
